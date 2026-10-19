@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hava Durumu PWA</title>
+  
+  <!-- PWA Manifest & Renk Ayarları -->
+  <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Hava%20Durumu%20PWA%22,%22short_name%22:%22HavaPWA%22,%22start_url%22:%22./%22,%22display%22:%22standalone%22,%22background_color%22:%22#0f172a%22,%22theme_color%22:%22#0f172a%22,%22icons%22:[{%22src%22:%22https://cdn-icons-png.flaticon.com/512/1163/1163661.png%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22}]}">
+  <meta name="theme-color" content="#0f172a">
+  
+  <!-- Tailwind CSS & FontAwesome (İkonlar için) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans p-4">
+
+  <!-- Çevrim Dışı (Offline) Uyarısı -->
+  <div id="offline-banner" class="hidden fixed top-0 left-0 w-full bg-red-600 text-white text-center py-2 px-4 text-sm font-semibold z-50">
+    <i class="fa-solid fa-wifi-slash mr-2"></i> Çevrim dışısınız. İnternet bağlantınızı kontrol edin!
+  </div>
+
+  <div class="max-w-md mx-auto pt-6 pb-12 space-y-4">
+    
+    <!-- Üst Bar: Başlık & Tema Değiştirici -->
+    <header class="flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">Hava Durumu</h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Open-Meteo API PWA</p>
+      </div>
+      <button id="theme-toggle" class="p-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">
+        <i class="fa-solid fa-moon text-lg dark:hidden"></i>
+        <i class="fa-solid fa-sun text-lg hidden dark:block text-amber-400"></i>
+      </button>
+    </header>
+
+    <!-- Arama ve Konum Butonları -->
+    <div class="flex gap-2">
+      <div class="relative flex-1">
+        <input type="text" id="city-input" placeholder="Şehir adı girin..." class="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm">
+        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+      </div>
+      <button id="search-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl transition font-medium text-sm">
+        Ara
+      </button>
+      <button id="geo-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-3 rounded-xl transition" title="Konumumu Kullan">
+        <i class="fa-solid fa-location-arrow"></i>
+      </button>
+    </div>
+
+    <!-- Hata Mesajı Kutusu -->
+    <div id="error-box" class="hidden p-3 bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300 rounded-xl text-sm flex items-center gap-2">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span id="error-msg">Bir hata oluştu.</span>
+    </div>
+
+    <!-- Yükleniyor Göstergesi -->
+    <div id="loading" class="hidden text-center py-8">
+      <i class="fa-solid fa-spinner fa-spin text-3xl text-blue-500"></i>
+      <p class="text-sm text-slate-500 mt-2">Hava durumu getiriliyor...</p>
+    </div>
+
+    <!-- Güncel Hava Durumu Kartı -->
+    <main id="weather-content" class="space-y-4">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700/50">
+        <div class="flex justify-between items-start">
+          <div>
+            <h2 id="location-name" class="text-2xl font-bold">--</h2>
+            <p id="weather-desc" class="text-sm text-slate-500 dark:text-slate-400 capitalize">--</p>
+          </div>
+          <div id="weather-icon" class="text-4xl text-blue-500">
+            <i class="fa-solid fa-cloud-sun"></i>
+          </div>
+        </div>
+
+        <div class="mt-6 flex items-baseline">
+          <span id="temp-current" class="text-5xl font-extrabold tracking-tight">--</span>
+          <span class="text-2xl font-semibold ml-1">°C</span>
+        </div>
+
+        <!-- Detay Bilgiler (Nem, Rüzgar, Min-Maks) -->
+        <div class="grid grid-cols-2 gap-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-600 dark:text-slate-400">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-droplet text-blue-500 text-base"></i>
+            <div>
+              <p class="text-slate-400">Nem</p>
+              <p id="humidity-val" class="font-semibold text-slate-700 dark:text-slate-200 text-sm">--%</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-wind text-teal-500 text-base"></i>
+            <div>
+              <p class="text-slate-400">Rüzgâr</p>
+              <p id="wind-val" class="font-semibold text-slate-700 dark:text-slate-200 text-sm">-- km/s</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 mt-1">
+            <i class="fa-solid fa-temperature-arrow-up text-red-500 text-base"></i>
+            <div>
+              <p class="text-slate-400">Maks. Sıcaklık</p>
+              <p id="temp-max-today" class="font-semibold text-slate-700 dark:text-slate-200 text-sm">--°C</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 mt-1">
+            <i class="fa-solid fa-temperature-arrow-down text-blue-400 text-base"></i>
+            <div>
+              <p class="text-slate-400">Min. Sıcaklık</p>
+              <p id="temp-min-today" class="font-semibold text-slate-700 dark:text-slate-200 text-sm">--°C</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Güncelleme Zamanı -->
+        <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/30 text-right">
+          <span class="text-[10px] text-slate-400">Son Güncelleme: <span id="last-updated">--</span></span>
+        </div>
+      </div>
+
+      <!-- 5 Günlük Hava Tahmini -->
+      <div>
+        <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-2 px-1">5 GÜNLÜK TAHMİN</h3>
+        <div id="forecast-list" class="space-y-2">
+          <!-- JS ile doldurulacak -->
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
